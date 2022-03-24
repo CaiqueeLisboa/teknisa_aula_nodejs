@@ -36,15 +36,8 @@ app.post('/createProgrammer', async (req, res) => {
     try {
         const params = req.body;
         const properties = ['name', 'python', 'java', 'javascript'];
-        const check = properties.every((property) => {
-            return property in params;
-    });
-    /* se não passaram todos os valores na requisição envia a mensagem de erro e finaliza a função */
-    if (!check) {
-        const propStr = properties.join(', ');
-        res.send(`All parameters needed to create a programmer must be sent: ${propStr}`);
-        return;
-    }
+        /* valida se os parametros passados foram corretos */
+        validateProperties(properties, params, 'every');
     /* se tudo der certo cria o novo programador */
     const newProgrammer = await programmer.create({
         name: params.name,
@@ -62,17 +55,14 @@ app.post('/createProgrammer', async (req, res) => {
 app.get('/retrieveProgrammer', async (req, res) => {
     try {
         const params = req.query;
-        /* confere se tem um id no parametro para a pesquisa */
         if ('id' in params) {
-            /* confere se a coluna da chave primária se existe o id passado como parametro */
             const record = await programmer.findByPk(params.id);
-            /* confere se existe o id */
             if (record) {
                 res.send(record);
             } else {
                 res.send('No programmer found using received ID');
-                }
-                return;
+            }
+            return;
         }
         const records = await programmer.findAll();
         res.send(records);
@@ -85,33 +75,18 @@ app.get('/retrieveProgrammer', async (req, res) => {
 app.put('/updateProgrammer', async (req, res) => {
     try {
         const params = req.body;
-        /* confere se foi passado um id de parametro */
-        if (!('id' in params)) {
-            res.send(`Missing 'id' in request body`);
-            return;
-        }
-        const record = await programmer.findByPk(params.id);
-        /* verifica se existe um programador com o id informado */
-        if (!record) {
-            res.send(`Programmer ID not found.`);
-            return;
-        }
+        /*valida o id */
+        const record = await validateID(params);
         /* verifica se existe e qual parametro foi passado para ser atualizado */
         const properties = ['name', 'python', 'java', 'javascript'];
-        const check = properties.some((property) => {
-            return property in params;
-        });
-        /* se os parametros passados forem inválidos informa o usuário */
-        if (!check) {
-            const propStr = properties.join(', ');
-            res.send(`Request body doesn't have any of the following properties: ${propStr}`);
-            return;
-        }
+        /* valida se os parametros passados foram corretos */
+        validateProperties(properties, params, 'some');
         /* atualiza a base de dados ou mantém o que está salvo */
         record.name = params.name || record.name;
-        record.python = params.python || record.python;
-        record.java = params.java || record.java;
-        record.javascript = params.javascript || record.javascript;
+        /* if ternário, ? = if - : = else */
+        record.python = 'python' in params ? params.python : record.python;
+        record.java = 'java' in params ? params.java : record.java;
+        record.javascript = 'javascript' in params ? params.javascript : record.javascript;
         await record.save();
         res.send(`${record.id} ${record.name} - Updated successfully`);
     } catch (error) {
@@ -123,21 +98,50 @@ app.put('/updateProgrammer', async (req, res) => {
 app.delete('/deleteProgrammer', async (req, res) => {
     try {
         const params = req.body;
-        /* confere se tem um id */
-        if (!('id' in params)) {
-            res.send(`Missing 'id' in request body`);
-            return;
-        }
-        const record = await programmer.findByPk(params.id);
-        /* confere se existe um registro com o id informado */
-        if (!record) {
-            res.send(`Programmer ID not found.`);
-            return;
-        }
+        /*valida o id */
+        const record = await validateID(params);
         /* deleta o registro */
         await record.destroy();
         res.send(`${record.id} ${record.name} - Deleted successfully`);
     } catch (error) {
-    res.send(error);
+        res.send(error);
     }
 });
+
+/* função que verifica e valida os id */
+const validateID = async (params) => {
+    try {
+        /* confere se tem um id no parametro para a pesquisa */
+        if (!('id') in params) {
+            throw `Missing 'id' in request body`;
+        }
+        /* confere se a coluna da chave primária se existe o id passado como parametro */
+        const record = await programmer.findByPk(params.id);
+         /* confere se existe o id */
+        if (!record) {
+            throw `Programmer ID not found.`;
+        }
+        return record;
+    } catch (error) {
+    throw error;
+    }
+}
+
+/* função que valida as propriedades do parametro */
+const validateProperties = (properties, params, fn) => {
+    try {
+        /* Confere se os parametros foram passados */
+        const check = properties[fn]((property) => {
+            return property in params;
+        });
+        /* se os parametros foram passados confere se estão corretos */
+        if (!check) {
+            const propStr = properties.join(', ');
+            throw `Request body doesn't have any of the following
+        properties: ${propStr}`;
+        }
+            return true;
+    } catch (error) {
+        throw error;
+    }
+}
